@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import User from '@/models/User';
-import { connectDB } from '@/lib/db';
 import { auth } from '@/auth';
 import puppeteer, { Browser } from 'puppeteer';
 import { sendHTMLEmail } from '@/lib/server-actions/email';
 import { LPUAttendanceEmail } from '@/templates/email';
+import { decrypt } from '@/lib/crypto';
 
 export const POST = auth(async function POST(request: any) {
   const { regNo, password, email } = await request.json();
@@ -52,7 +51,7 @@ export const POST = auth(async function POST(request: any) {
     });
 
     // Type password
-    await page.type('#TxtpwdAutoId_8767', password, { delay: 100 });
+    await page.type('#TxtpwdAutoId_8767', decrypt(password), { delay: 100 });
 
     // Click login button with explicit wait
     await Promise.all([
