@@ -1,5 +1,5 @@
 export const APP_INFO = {
-  name: 'Devocode',
-  email: process.env.GMAIL || '',
+  name: 'Devotrack',
+  email: process.env.EMAIL || '',
   url: process.env.NEXTAUTH_URL || ''
 };
