@@ -1,6 +1,7 @@
 'use client';
 import { formatReadableDate } from '@/lib/helper';
 import {
+  addToast,
   Button,
   Card,
   CardBody,
@@ -13,6 +14,7 @@ import {
   DropdownTrigger,
   Listbox,
   ListboxItem,
+  Skeleton,
   Switch,
   Tab,
   Tabs
@@ -22,7 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useQueryState } from 'nuqs';
 import NewJob from './new';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 // Helper function to get day names
 const getDayNames = (days: number[]) => {
@@ -48,7 +50,11 @@ const getTime = (hours: number, minutes: number) => {
 export default function Jobs({ session }: { session: any }) {
   const [modal, setModal] = useQueryState('modal');
 
-  const { data: jobs = [], refetch } = useQuery({
+  const {
+    data: jobs = [],
+    refetch,
+    isLoading
+  } = useQuery({
     queryKey: ['jobs'],
     queryFn: () => fetch('/api/v1/lpu/jobs').then((res) => res.json())
   });
@@ -66,45 +72,95 @@ export default function Jobs({ session }: { session: any }) {
   return (
     <>
       <div className="container mx-auto py-10">
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-medium">
-            Scheduled Automations ({jobs.length})
-          </h1>
-          <Button
-            variant="solid"
-            color="primary"
-            startContent={
-              <Icon icon="solar:add-circle-bold-duotone" width={18} />
-            }
-            onPress={() => {
-              setModal('new-job');
-            }}
-          >
-            Create new automation
-          </Button>
-        </div>
-        <div className="grid gap-6">
-          {sortedJobs.map((item: any) => (
-            <JobItem key={item._id.toString()} item={item} />
-          ))}
-        </div>
+        {isLoading ? (
+          <LoadingSkeleton />
+        ) : (
+          <>
+            {jobs.length > 0 && (
+              <div className="mb-4 flex items-center justify-between">
+                <h1 className="text-2xl font-medium">
+                  Scheduled Automations ({jobs.length})
+                </h1>
+                <Button
+                  variant="solid"
+                  color="primary"
+                  startContent={
+                    <Icon icon="solar:add-circle-bold-duotone" width={18} />
+                  }
+                  onPress={() => {
+                    setModal('new-job');
+                  }}
+                >
+                  Create new automation
+                </Button>
+              </div>
+            )}
+            {sortedJobs.length > 0 ? (
+              <div className="grid gap-6">
+                {sortedJobs.map((item: any) => (
+                  <JobItem
+                    key={item._id.toString()}
+                    item={item}
+                    refetch={refetch}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="mt-8 flex flex-col items-center justify-center gap-2">
+                <Icon
+                  icon="solar:emoji-funny-square-line-duotone"
+                  width={100}
+                />
+                <p className="text-sm text-default-500">No automations found</p>
+                <Button
+                  variant="solid"
+                  color="primary"
+                  onPress={() => setModal('new-job')}
+                >
+                  Create new automation
+                </Button>
+              </div>
+            )}
+          </>
+        )}
       </div>
       <NewJob session={session} />
     </>
   );
 }
 
-function JobItem({ item }: { item: any }) {
+function JobItem({ item, refetch }: { item: any; refetch: () => void }) {
+  const [isDeleting, setIsDeleting] = useState(false);
   const isExpired = item.schedule.expiresAt
     ? new Date(formatReadableDate(item.schedule.expiresAt.toString())) <
       new Date()
     : false;
 
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await fetch(`/api/v1/lpu/jobs`, {
+        body: JSON.stringify({ jobId: item.jobId }),
+        method: 'DELETE'
+      });
+      addToast({
+        title: 'Automation deleted',
+        description: 'The automation has been deleted successfully',
+        color: 'success'
+      });
+      refetch();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <Card
       title={isExpired ? 'Job Expired' : ''}
       className={cn('overflow-hidden', isExpired && 'opacity-50')}
-      isDisabled={isExpired}
+      isDisabled={isExpired || isDeleting}
     >
       <CardHeader className="bg-default-100">
         <div className="flex w-full items-start justify-between">
@@ -137,7 +193,11 @@ function JobItem({ item }: { item: any }) {
               </DropdownTrigger>
               <DropdownMenu>
                 <DropdownItem key="edit">Edit</DropdownItem>
-                <DropdownItem key="delete" color="danger">
+                <DropdownItem
+                  key="delete"
+                  color="danger"
+                  onPress={handleDelete}
+                >
                   Delete
                 </DropdownItem>
               </DropdownMenu>
@@ -153,29 +213,36 @@ function JobItem({ item }: { item: any }) {
             base: 'px-3 first:rounded-t-medium last:rounded-b-medium rounded-none gap-3 h-12 data-[hover=true]:bg-background cursor-default'
           }}
         >
-          <ListboxItem
-            key="schedules"
-            // endContent={<ItemCounter number={13} />}
-            startContent={
-              <IconWrapper className="bg-success/10 text-success">
-                <Icon icon="solar:calendar-bold-duotone" width={20} />
-              </IconWrapper>
-            }
-            endContent={
-              <div className="flex items-center gap-1">
-                {getDayNames(item.schedule.wdays).map((day, index) => (
-                  <p
-                    key={`day-${index}`}
-                    className="flex aspect-square w-6 items-center justify-center rounded-md bg-default-200 text-sm shadow-md"
-                  >
-                    {day}
-                  </p>
-                ))}
-              </div>
-            }
-          >
-            Schedules
-          </ListboxItem>
+          {item.schedule.wdays.length > 0 ? (
+            <ListboxItem
+              key="schedules"
+              startContent={
+                <IconWrapper className="bg-success/10 text-success">
+                  <Icon icon="solar:calendar-bold-duotone" width={20} />
+                </IconWrapper>
+              }
+              endContent={
+                <div className="flex items-center gap-1">
+                  {item.schedule.wdays[0] === -1 ? (
+                    <p className="flex h-6 items-center justify-center rounded-md bg-default-200 px-2 text-sm shadow-md">
+                      Every day
+                    </p>
+                  ) : (
+                    getDayNames(item.schedule.wdays).map((day, index) => (
+                      <p
+                        key={`day-${index}`}
+                        className="flex aspect-square w-6 items-center justify-center rounded-md bg-default-200 text-sm shadow-md"
+                      >
+                        {day}
+                      </p>
+                    ))
+                  )}
+                </div>
+              }
+            >
+              Schedules
+            </ListboxItem>
+          ) : null}
           <ListboxItem
             key="time"
             // endContent={<ItemCounter number={13} />}
@@ -271,3 +338,90 @@ export const IconWrapper = ({
     {children}
   </div>
 );
+
+function LoadingSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <Card
+          key={`loading-${index}`}
+          className="w-full overflow-hidden rounded-large border shadow-small"
+        >
+          {/* Header */}
+          <CardHeader className="flex-col items-start gap-2 bg-default-100 p-4 py-3">
+            <div className="flex w-full items-center justify-between">
+              <Skeleton className="h-6 w-64 rounded-small" />
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-6 w-16 rounded-small" />
+                <Skeleton className="h-6 w-12 rounded-small" />
+                <Skeleton className="h-8 w-8 rounded-small" />
+              </div>
+            </div>
+
+            {/* URL */}
+            <div className="flex w-full items-center gap-2">
+              <Skeleton className="h-5 w-5 rounded-small text-default-500" />
+              <Skeleton className="h-5 w-full max-w-xl rounded-small" />
+            </div>
+          </CardHeader>
+
+          {/* Settings List */}
+          <div className="space-y-3 p-4">
+            {/* Schedules */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Skeleton className="flex h-8 w-8 items-center justify-center rounded-small" />
+                <Skeleton className="h-5 w-24 rounded-small" />{' '}
+                {/* Schedules */}
+              </div>
+              <div className="flex gap-1">
+                {['M', 'T', 'W', 'T', 'F'].map((_day, index) => (
+                  <Skeleton key={index} className="h-8 w-8 rounded-small" />
+                ))}
+              </div>
+            </div>
+
+            {/* Time */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Skeleton className="flex h-8 w-8 items-center justify-center rounded-small" />
+                <Skeleton className="h-5 w-16 rounded-small" /> {/* Time */}
+              </div>
+              <Skeleton className="h-8 w-24 rounded-small" /> {/* Time value */}
+            </div>
+
+            {/* Timezone */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Skeleton className="flex h-8 w-8 items-center justify-center rounded-small" />
+                <Skeleton className="h-5 w-24 rounded-small" /> {/* Timezone */}
+              </div>
+              <Skeleton className="h-8 w-32 rounded-small" />{' '}
+              {/* Timezone value */}
+            </div>
+
+            {/* Expires */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Skeleton className="flex h-8 w-8 items-center justify-center rounded-small" />
+                <Skeleton className="h-5 w-20 rounded-small" /> {/* Expires */}
+              </div>
+              <Skeleton className="h-8 w-32 rounded-small" />{' '}
+              {/* Expires value */}
+            </div>
+
+            {/* Notification Emails */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Skeleton className="flex h-8 w-8 items-center justify-center rounded-small" />
+                <Skeleton className="h-5 w-36 rounded-small" />{' '}
+                {/* Notification Emails */}
+              </div>
+              <Skeleton className="h-8 w-12 rounded-small" /> {/* Toggle */}
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}

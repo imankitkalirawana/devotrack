@@ -32,6 +32,26 @@ type Schedule = {
   months: number[];
 };
 
+const getDayNames = (days: number[]) => {
+  const dayMap = {
+    0: 'Sun',
+    1: 'Mon',
+    2: 'Tue',
+    3: 'Wed',
+    4: 'Thu',
+    5: 'Fri',
+    6: 'Sat'
+  };
+
+  return days.map((day) => dayMap[day as keyof typeof dayMap]);
+};
+
+const getTime = (hours: number, minutes: number) => {
+  const amPm = hours < 12 ? 'AM' : 'PM';
+  const hour = hours % 12 || 12;
+  return `${hour}:${minutes.toString().padStart(2, '0')} ${amPm}`;
+};
+
 const automations = [
   {
     label: 'LPU Check-in',
@@ -63,7 +83,7 @@ export default function NewJob({ session }: { session: any }) {
         mdays: [],
         minutes: [],
         months: [],
-        wdays: []
+        wdays: [-1]
       },
       body: {
         regNo: '',
@@ -108,6 +128,7 @@ export default function NewJob({ session }: { session: any }) {
         formik.resetForm();
         setModal(null);
       }}
+      hideCloseButton
     >
       <ModalContent
         as={Form}
@@ -153,6 +174,26 @@ export default function NewJob({ session }: { session: any }) {
                 )}
               </Select>
               <Input
+                label="Schedule"
+                placeholder="eg: Weekdays, 10:00 AM"
+                onBlur={(e) => handleScheduleInput(e.target.value)}
+                description={
+                  <p>
+                    Will execute{' '}
+                    {formik.values.schedule.wdays[0] !== -1
+                      ? formik.values.schedule.wdays.length > 0 &&
+                        getDayNames(formik.values.schedule.wdays).join(', ')
+                      : 'every day'}{' '}
+                    at{' '}
+                    {getTime(
+                      formik.values.schedule?.hours[0] ?? 0,
+                      formik.values.schedule?.minutes[0] ?? 0
+                    )}
+                  </p>
+                }
+              />
+
+              <Input
                 label="Title"
                 name="title"
                 placeholder="Enter Title"
@@ -161,6 +202,9 @@ export default function NewJob({ session }: { session: any }) {
                 onChange={formik.handleChange}
               />
               <Input
+                autoSave="off"
+                autoComplete="off"
+                autoCorrect="off"
                 name="body.regNo"
                 label="Registration Number"
                 placeholder="eg: 12345678"
@@ -179,6 +223,9 @@ export default function NewJob({ session }: { session: any }) {
                 isRequired
               />
               <Input
+                autoSave="off"
+                autoComplete="off"
+                autoCorrect="off"
                 name="body.password"
                 label="Password"
                 type="password"
@@ -188,22 +235,10 @@ export default function NewJob({ session }: { session: any }) {
                 description="Your password will be end to end encrypted"
                 isRequired
               />
-              <Input
-                label="Schedule"
-                placeholder="eg: Weekdays, 10:00 AM"
-                onBlur={(e) => handleScheduleInput(e.target.value)}
-                isRequired
-              />
             </ModalBody>
             <ModalFooter className="w-full">
-              <Button
-                fullWidth
-                color="danger"
-                variant="light"
-                onPress={onClose}
-                type="reset"
-              >
-                Close
+              <Button fullWidth variant="flat" onPress={onClose} type="reset">
+                Cancel
               </Button>
               <Button
                 fullWidth

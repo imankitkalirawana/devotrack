@@ -76,8 +76,6 @@ export const POST = auth(async function POST(request: any) {
       requestTimeout: 120000
     };
 
-    console.log('job: ', job);
-
     const response = await axios.put(
       url,
       {
@@ -98,19 +96,20 @@ export const POST = auth(async function POST(request: any) {
       const jobCollection = db.collection('jobs');
       await jobCollection.insertOne({
         ...job,
+        jobId: response.data.jobId,
         userId: request?.auth?.user?.email
       });
       await client.close();
     } else {
       return NextResponse.json(
         {
-          error: 'Failed to create job'
+          error: 'Failed to create automation'
         },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ message: 'Job created successfully' });
+    return NextResponse.json({ message: 'Automation created successfully' });
   } catch (error) {
     // console.error(error);
     return NextResponse.json(
