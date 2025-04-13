@@ -36,10 +36,11 @@ export const POST = auth(async function POST(request: any) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { regNo, password, type = 'check-in' } = await request.json();
+  const data = await request.json();
+
   const url = 'https://api.cron-job.org/jobs';
 
-  if (!regNo || !password) {
+  if (!data.body.regNo || !data.body.password) {
     return NextResponse.json(
       { error: 'Reg No and password are required' },
       { status: 400 }
@@ -48,34 +49,34 @@ export const POST = auth(async function POST(request: any) {
 
   try {
     const body = {
-      regNo,
-      password: encrypt(password),
+      regNo: data.body.regNo,
+      password: encrypt(data.body.password),
       email: request?.auth?.user?.email
     };
 
+    // return NextResponse.json({ message: 'Job created successfully' });
+
+    const title = data.title
+      ? `${data.title} - ${request?.auth?.user?.email}`
+      : `${data.automation} - ${data.body.regNo} - ${request?.auth?.user?.email}`;
+
     const job = {
-      title: `LPU ${type} - ${regNo} - ${request?.auth?.user?.email}`,
-      url: `${process.env.NEXTAUTH_URL}api/v1/lpu/${type}`,
+      title,
       enabled: true,
       saveResponses: true,
-      folderId: 46043,
-      requestMethod: 1,
+      url: data.url,
+      folderId: parseInt(process.env.FOLDER_ID || '0'),
+      schedule: data.schedule,
       extendedData: {
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(body)
       },
-      schedule: {
-        timezone: 'Asia/Kolkata',
-        expiresAt: 0,
-        hours: [10],
-        mdays: [-1],
-        minutes: [0],
-        months: [-1],
-        wdays: [1, 2, 3, 4, 5]
-      }
+      requestTimeout: 120000
     };
+
+    console.log('job: ', job);
 
     const response = await axios.put(
       url,
@@ -89,6 +90,7 @@ export const POST = auth(async function POST(request: any) {
         }
       }
     );
+
     if (response.status === 200) {
       const client = new MongoClient(process.env.MONGO_URL || '');
       await client.connect();
@@ -110,7 +112,7 @@ export const POST = auth(async function POST(request: any) {
 
     return NextResponse.json({ message: 'Job created successfully' });
   } catch (error) {
-    console.error(error);
+    // console.error(error);
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Internal server error'

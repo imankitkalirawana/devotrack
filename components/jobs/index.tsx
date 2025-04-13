@@ -7,6 +7,10 @@ import {
   CardHeader,
   Chip,
   cn,
+  Dropdown,
+  DropdownItem,
+  DropdownMenu,
+  DropdownTrigger,
   Listbox,
   ListboxItem,
   Switch,
@@ -16,23 +20,9 @@ import {
 import { Icon } from '@iconify/react/dist/iconify.js';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { BugIcon } from 'lucide-react';
-
-import { useState } from 'react';
-
-// Sample data - in a real app, this would be passed as a prop or fetched from an API
-
-// Helper function to get request method name
-const getMethodName = (methodCode: number) => {
-  const methods = {
-    0: 'GET',
-    1: 'POST',
-    2: 'PUT',
-    3: 'DELETE',
-    4: 'PATCH'
-  };
-  return methods[methodCode as keyof typeof methods] || 'UNKNOWN';
-};
+import { useQueryState } from 'nuqs';
+import NewJob from './new';
+import { useEffect, useMemo } from 'react';
 
 // Helper function to get day names
 const getDayNames = (days: number[]) => {
@@ -55,32 +45,52 @@ const getTime = (hours: number, minutes: number) => {
   return `${hour}:${minutes.toString().padStart(2, '0')} ${amPm}`;
 };
 
-export default function Jobs() {
-  const { data: jobs = [] } = useQuery({
+export default function Jobs({ session }: { session: any }) {
+  const [modal, setModal] = useQueryState('modal');
+
+  const { data: jobs = [], refetch } = useQuery({
     queryKey: ['jobs'],
     queryFn: () => fetch('/api/v1/lpu/jobs').then((res) => res.json())
   });
 
+  useEffect(() => {
+    refetch();
+  }, [modal]);
+
+  const sortedJobs = useMemo(() => {
+    return jobs.sort((a: any, b: any) => {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [jobs]);
+
   return (
-    <div className="container mx-auto py-10">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-medium">Scheduled Automations</h1>
-        <Button
-          variant="solid"
-          color="primary"
-          startContent={
-            <Icon icon="solar:add-circle-bold-duotone" width={18} />
-          }
-        >
-          Create new automation
-        </Button>
+    <>
+      <div className="container mx-auto py-10">
+        <div className="mb-4 flex items-center justify-between">
+          <h1 className="text-2xl font-medium">
+            Scheduled Automations ({jobs.length})
+          </h1>
+          <Button
+            variant="solid"
+            color="primary"
+            startContent={
+              <Icon icon="solar:add-circle-bold-duotone" width={18} />
+            }
+            onPress={() => {
+              setModal('new-job');
+            }}
+          >
+            Create new automation
+          </Button>
+        </div>
+        <div className="grid gap-6">
+          {sortedJobs.map((item: any) => (
+            <JobItem key={item._id.toString()} item={item} />
+          ))}
+        </div>
       </div>
-      <div className="grid gap-6">
-        {jobs.map((item: any) => (
-          <JobItem key={item._id.$oid} item={item} />
-        ))}
-      </div>
-    </div>
+      <NewJob session={session} />
+    </>
   );
 }
 
@@ -89,10 +99,10 @@ function JobItem({ item }: { item: any }) {
     ? new Date(formatReadableDate(item.schedule.expiresAt.toString())) <
       new Date()
     : false;
+
   return (
     <Card
       title={isExpired ? 'Job Expired' : ''}
-      key={item._id.$oid}
       className={cn('overflow-hidden', isExpired && 'opacity-50')}
       isDisabled={isExpired}
     >
@@ -115,6 +125,23 @@ function JobItem({ item }: { item: any }) {
               {isExpired ? 'Expired' : item.enabled ? 'Active' : 'Inactive'}
             </Chip>
             <Switch isSelected={isExpired ? false : item.enabled} />
+            <Dropdown aria-label="Actions" placement="bottom-end">
+              <DropdownTrigger>
+                <Button isIconOnly variant="light" size="sm">
+                  <Icon
+                    icon="solar:menu-dots-bold"
+                    className="rotate-90"
+                    width={18}
+                  />
+                </Button>
+              </DropdownTrigger>
+              <DropdownMenu>
+                <DropdownItem key="edit">Edit</DropdownItem>
+                <DropdownItem key="delete" color="danger">
+                  Delete
+                </DropdownItem>
+              </DropdownMenu>
+            </Dropdown>
           </div>
         </div>
       </CardHeader>
@@ -136,9 +163,9 @@ function JobItem({ item }: { item: any }) {
             }
             endContent={
               <div className="flex items-center gap-1">
-                {getDayNames(item.schedule.wdays).map((day) => (
+                {getDayNames(item.schedule.wdays).map((day, index) => (
                   <p
-                    key={day}
+                    key={`day-${index}`}
                     className="flex aspect-square w-6 items-center justify-center rounded-md bg-default-200 text-sm shadow-md"
                   >
                     {day}
@@ -183,7 +210,7 @@ function JobItem({ item }: { item: any }) {
             Timezone
           </ListboxItem>
           <ListboxItem
-            key="timezone"
+            key="expiresAt"
             startContent={
               <IconWrapper className="bg-orange-500/10 text-orange-500">
                 <Icon
