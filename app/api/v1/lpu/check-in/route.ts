@@ -83,9 +83,9 @@ export const POST = auth(async function POST(request: any) {
 
     const attendancePage = await browser.newPage();
 
-    attendancePage.on('dialog', async (dialog) => {
-      await dialog.accept();
-    });
+    // attendancePage.on('dialog', async (dialog) => {
+    //   await dialog.accept();
+    // });
 
     // Set geolocation to avoid permission prompt
     await attendancePage.setGeolocation({
