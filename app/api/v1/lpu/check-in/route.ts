@@ -16,7 +16,7 @@ export const POST = auth(async function POST(request: any) {
   }
 
   let browser: Browser = await puppeteer.launch({
-    headless: false, // Set to false for debugging
+    headless: process.env.NODE_ENV === 'production', // Set to false for debugging
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
   try {
