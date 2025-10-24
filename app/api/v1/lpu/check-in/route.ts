@@ -3,7 +3,33 @@ import { auth } from '@/auth';
 import puppeteer, { Browser } from 'puppeteer';
 import { sendHTMLEmail } from '@/lib/server-actions/email';
 import { LPUAttendanceEmail } from '@/templates/email';
-import { decrypt } from '@/lib/crypto';
+import axios from 'axios';
+import https from 'https';
+
+const agent = new https.Agent({
+  rejectUnauthorized: false
+});
+
+async function isWebsiteReachable(url: string) {
+  try {
+    const response = await axios.get(url, {
+      httpsAgent: agent,
+      timeout: 5000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0'
+      },
+      validateStatus: () => true
+    });
+    console.log(`Status code: ${response.status}`);
+    return true;
+  } catch (error) {
+    console.error(
+      `Error reaching ${url}:`,
+      error instanceof Error ? error.message : 'Unknown error'
+    );
+    return false;
+  }
+}
 
 export const POST = auth(async function POST(request: any) {
   const { regNo, password, email } = await request.json();
@@ -12,6 +38,14 @@ export const POST = auth(async function POST(request: any) {
     return NextResponse.json(
       { error: 'Registration number and password are required' },
       { status: 400 }
+    );
+  }
+
+  const isReachable = await isWebsiteReachable('https://ums.lpu.in');
+  if (!isReachable) {
+    return NextResponse.json(
+      { error: 'Unable to connect to UMS' },
+      { status: 500 }
     );
   }
 
@@ -51,7 +85,7 @@ export const POST = auth(async function POST(request: any) {
     });
 
     // Type password
-    await page.type('#TxtpwdAutoId_8767', decrypt(password), { delay: 100 });
+    await page.type('#TxtpwdAutoId_8767', password, { delay: 100 });
 
     // Click login button with explicit wait
     await Promise.all([
@@ -93,7 +127,7 @@ export const POST = auth(async function POST(request: any) {
       longitude: 77.5856633
     });
 
-    // Navigate to attendance page
+    // Navigate to attendance pagexs
     await attendancePage.goto(
       'https://ums.lpu.in/lpuums/frmMarkOJTAttendance.aspx',
       {
@@ -159,7 +193,7 @@ export const POST = auth(async function POST(request: any) {
     return NextResponse.json({ message: 'An error occurred' }, { status: 500 });
   } finally {
     if (browser) {
-      await browser.close();
+      // await browser.close();
     }
   }
 });

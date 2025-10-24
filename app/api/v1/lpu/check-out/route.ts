@@ -1,13 +1,46 @@
 import { NextResponse } from 'next/server';
-import User from '@/models/User';
-import { connectDB } from '@/lib/db';
 import { auth } from '@/auth';
 import puppeteer, { Browser } from 'puppeteer';
 import { sendHTMLEmail } from '@/lib/server-actions/email';
 import { LPUAttendanceEmail } from '@/templates/email';
+import axios from 'axios';
+import https from 'https';
+
+const agent = new https.Agent({
+  rejectUnauthorized: false
+});
+
+async function isWebsiteReachable(url: string) {
+  try {
+    const response = await axios.get(url, {
+      httpsAgent: agent,
+      timeout: 5000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0'
+      },
+      validateStatus: () => true
+    });
+    console.log(`Status code: ${response.status}`);
+    return true;
+  } catch (error) {
+    console.error(
+      `Error reaching ${url}:`,
+      error instanceof Error ? error.message : 'Unknown error'
+    );
+    return false;
+  }
+}
 
 export const POST = auth(async function POST(request: any) {
   const { regNo, password, email } = await request.json();
+
+  const isReachable = await isWebsiteReachable('https://ums.lpu.in');
+  if (!isReachable) {
+    return NextResponse.json(
+      { error: 'Unable to connect to UMS' },
+      { status: 500 }
+    );
+  }
 
   if (!regNo || !password) {
     return NextResponse.json(
@@ -17,7 +50,7 @@ export const POST = auth(async function POST(request: any) {
   }
 
   let browser: Browser = await puppeteer.launch({
-    headless: process.env.NODE_ENV === 'production', // Set to false for debugging
+    headless: true, // Set to false for debugging
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
@@ -150,10 +183,10 @@ export const POST = auth(async function POST(request: any) {
       html: LPUAttendanceEmail({ regNo, status: 'success' })
     });
     return NextResponse.json(
-      { message: 'Check-out successful' },
+      { message: 'success: Check-out successful' },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
     await sendHTMLEmail({
       to: email,
@@ -164,7 +197,7 @@ export const POST = auth(async function POST(request: any) {
         message: error instanceof Error ? error.message : 'Unknown error'
       })
     });
-    return NextResponse.json({ message: 'An error occurred' }, { status: 500 });
+    return NextResponse.json({ message: error.message }, { status: 500 });
   } finally {
     if (browser) {
       await browser.close();

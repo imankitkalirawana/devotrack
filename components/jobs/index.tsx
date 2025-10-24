@@ -50,14 +50,12 @@ const getTime = (hours: number, minutes: number) => {
 export default function Jobs({ session }: { session: any }) {
   const [modal, setModal] = useQueryState('modal');
 
-  const {
-    data: jobs = [],
-    refetch,
-    isLoading
-  } = useQuery({
+  const { data, refetch, isLoading } = useQuery({
     queryKey: ['jobs'],
     queryFn: () => fetch('/api/v1/lpu/jobs').then((res) => res.json())
   });
+
+  const jobs = data || [];
 
   useEffect(() => {
     refetch();
